@@ -4,15 +4,18 @@ from skimage.metrics import structural_similarity
 from tqdm import tqdm
 from fpdf import FPDF
 from PIL import Image
-import imagehash
 import hashlib
 import os
+
 
 def create_warning_file(folder):
     warning_file_name = "DO NOT MODIFY THIS FOLDER.txt"
     if not (folder / warning_file_name).exists():
         with open(folder / warning_file_name, "w") as f:
-            f.write("FILES IN THIS FOLDER WILL BE DELETED AND SOME FILES ARE USED FOR THIS PROGRAM'S FUNCTIONING. PLEASE DO NOT MODIFY THIS FOLDER OR STORE IMPORTANT FILES HERE.\n")
+            f.write(
+                "FILES IN THIS FOLDER WILL BE DELETED AND SOME FILES ARE USED FOR THIS PROGRAM'S FUNCTIONING. PLEASE DO NOT MODIFY THIS FOLDER OR STORE IMPORTANT FILES HERE.\n"
+            )
+
 
 def create_main_cache_directory():
     current_os_type = os.name
@@ -27,13 +30,18 @@ def create_main_cache_directory():
         main_cache_dir.mkdir(parents=True, exist_ok=True)
         create_warning_file(main_cache_dir)
 
-
     return main_cache_dir
+
 
 def get_parameters_hash(video_path, processing_frame_rate):
     hasher = hashlib.sha256()
 
-    with open(video_path, "rb") as f, tqdm(total=os.path.getsize(video_path), desc="Hashing Parameters", unit="B", unit_scale=True) as pbar:
+    with open(video_path, "rb") as f, tqdm(
+        total=os.path.getsize(video_path),
+        desc="Hashing Parameters",
+        unit="B",
+        unit_scale=True,
+    ) as pbar:
         for chunk in iter(lambda: f.read(4096), b""):
             hasher.update(chunk)
             pbar.update(len(chunk))
@@ -41,6 +49,7 @@ def get_parameters_hash(video_path, processing_frame_rate):
     hasher.update(str(processing_frame_rate).encode("utf-8"))
     hash_str = hasher.hexdigest()
     return hash_str
+
 
 def get_cache_dir_otherwise_set_output_dir(hash_str, vid_file_name):
     main_cache_dir = create_main_cache_directory()
@@ -59,7 +68,6 @@ def get_cache_dir_otherwise_set_output_dir(hash_str, vid_file_name):
                 if metadata_hash == hash_str:
                     return directory, True
 
-
     if main_cache_dir is not None:
         output_dir = main_cache_dir / folder_format
         output_dir.mkdir(parents=True, exist_ok=True)
@@ -67,31 +75,37 @@ def get_cache_dir_otherwise_set_output_dir(hash_str, vid_file_name):
     else:
         output_dir = Path(".") / folder_format
         output_dir.mkdir(parents=True, exist_ok=True)
-        
+
     for file in os.listdir(output_dir):
         os.remove(output_dir / file)
 
     return output_dir, False
 
+
 def split_video(video_path, processing_frame_rate):
-    """Splits a video into frames and saves them in a folder. """
+    """Splits a video into frames and saves them in a folder."""
 
     vid_file_name = video_path.name
     hash_str = get_parameters_hash(video_path, processing_frame_rate)
     hash_substr = hash_str[:6]
 
-    output_dir, cache_dir_exists_p = get_cache_dir_otherwise_set_output_dir(hash_str, vid_file_name)
+    output_dir, cache_dir_exists_p = get_cache_dir_otherwise_set_output_dir(
+        hash_str, vid_file_name
+    )
     if cache_dir_exists_p:
         print("Using cached frames, skipping processing.")
         return output_dir
-        
-    create_warning_file(output_dir)
 
+    create_warning_file(output_dir)
 
     vidcap = cv2.VideoCapture(str(video_path))
 
     original_fps = vidcap.get(cv2.CAP_PROP_FPS)
-    frame_skip = max(1, round(original_fps / processing_frame_rate)) if original_fps > processing_frame_rate else 1
+    frame_skip = (
+        max(1, round(original_fps / processing_frame_rate))
+        if original_fps > processing_frame_rate
+        else 1
+    )
     total_frames = int(vidcap.get(cv2.CAP_PROP_FRAME_COUNT))
 
     current_frame = 0
@@ -113,15 +127,20 @@ def split_video(video_path, processing_frame_rate):
             if chosen_image is None:
                 chosen_image = image
             else:
-                if are_slides_same(chosen_image, image) and current_frame < total_frames:
+                if (
+                    are_slides_same(chosen_image, image)
+                    and current_frame < total_frames
+                ):
                     if is_better_image(image, chosen_image):
                         chosen_image = image
                 else:
                     # Save the chosen image
-                    cv2.imwrite(str(output_dir / f"frame_{extracted_frame_count}.png"), chosen_image)
+                    cv2.imwrite(
+                        str(output_dir / f"frame_{extracted_frame_count}.png"),
+                        chosen_image,
+                    )
                     extracted_frame_count += 1
                     chosen_image = image
-
 
             current_frame += frame_skip
             pbar.update(frame_skip)
@@ -138,6 +157,7 @@ def split_video(video_path, processing_frame_rate):
 
     return output_dir
 
+
 def are_slides_same(image1, image2, similarity_threshold=0.90):
     """Returns True if the two images are similar enough to be considered the same slide. Otherwise, returns False."""
     image1_gray = cv2.cvtColor(image1, cv2.COLOR_BGR2GRAY)
@@ -150,6 +170,7 @@ def are_slides_same(image1, image2, similarity_threshold=0.90):
 
     return score >= similarity_threshold
 
+
 def is_better_image(image1, image2):
     """If image 1 is better than image 2, return True. Otherwise, return False. Assumes Images are similar"""
     # Check if image 1 has more contrast than image 2
@@ -161,20 +182,20 @@ def is_better_image(image1, image2):
     image2_contrast = cv2.Laplacian(image2_gray, cv2.CV_64F).var()
     return image1_contrast > image2_contrast
 
+
 def images_to_pdf(filename, image_folder):
-  # Open image to get its size
-  with Image.open(image_folder / "frame_0.png") as img:
-      width, height = img.size
+    # Open image to get its size
+    with Image.open(image_folder / "frame_0.png") as img:
+        width, height = img.size
 
-  pdf = FPDF(unit="pt", format=(width, height))
+    pdf = FPDF(unit="pt", format=(width, height))
 
-  files = sorted(os.listdir(image_folder))
-  for file in files:
+    files = sorted(os.listdir(image_folder))
+    for file in files:
         if file.endswith(".png"):
             image_path = os.path.join(image_folder, file)
             pdf.add_page()
             pdf.image(image_path, x=0, y=0, w=width, h=height)
 
-  output_pdf_path = Path(".") / f"{filename}.pdf"
-  pdf.output(output_pdf_path)
-
+    output_pdf_path = Path(".") / f"{filename}.pdf"
+    pdf.output(output_pdf_path)
